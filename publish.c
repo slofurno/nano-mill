@@ -9,11 +9,9 @@
 coroutine void publish(){
 
     int pub = nn_socket (AF_SP, NN_PUB);
-//    nn_setsockopt(pub, 
+    assert(pub>=0); 
     assert(nn_bind(pub,"tcp://127.0.0.1:666")>=0);
     int nbytes;
-    printf("ARE WE PUBBING\n"); 
-    assert(pub>=0); 
     while(1){
         char *d ="yo man";
         int sz_d = strlen(d) + 1;
@@ -25,12 +23,10 @@ coroutine void publish(){
 
 coroutine void subscribe(){
     printf("wtf m8");
-    int maxwait = 10000;
-    size_t sz = sizeof(maxwait);
     int sub = nn_socket (AF_SP, NN_SUB);
-//    nn_getsockopt(sub, NN_SUB, NN_RCVTIMEO, &maxwait, &sz);
     assert( sub>= 0);
     int n;
+    
     char *buf = NULL;
     printf("subbing on fd %d\n",sub);
     assert (nn_setsockopt (sub, NN_SUB, NN_SUB_SUBSCRIBE, "", 0) >= 0);
@@ -46,24 +42,17 @@ coroutine void subscribe(){
     printf("wait on fd %d\n",fd);
 
     while(1){
-        //int events = fdwait(sub, FDW_IN, -1);
         fdwait(fd, FDW_IN, -1);
         printf("rdy to rec?\n");
-        n = nn_recv(sub, &buf, NN_MSG, NN_DONTWAIT);
-        
-        if (n<0){
-            printf("WE WERENT READy??");
-            msleep(now()+1000); 
-        }else{
-            printf("rec: %s\n",buf);
-            nn_freemsg(buf);
-        }
+        assert(nn_recv(sub, &buf, NN_MSG, NN_DONTWAIT)>=0);
+
+        printf("rec: %s\n",buf);
+        nn_freemsg(buf);
     }
 }
 
 int main (const int argc, const char **argv)
 {
-    printf("wtf man...\n");
     go(publish());
     while(1){
         go(subscribe());
