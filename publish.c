@@ -7,25 +7,44 @@
 #include <nanomsg/pipeline.h>
 #include <libmill.h>
 
-void produce(){
+coroutine void produce(char *url){
     int producer = nn_socket(AF_SP, NN_PUSH);
     assert(producer>=0);
-    assert(nn_bind(producer, "tcp://127.0.0.1:667")>=0);
+    assert(nn_bind(producer, url)>=0);
     int bytes; 
-    char *msg = "ffmpeg gif export";
+    char msg [50];
     printf("producer ok\n");
+    
+    int fd;
+    size_t fd_sz = sizeof(fd);
 
-    while(1){
-       bytes = nn_send(producer, msg, strlen(msg)+1,NN_DONTWAIT);
-       msleep(now()+2000);
+    if (nn_getsockopt(producer, NN_SOL_SOCKET, NN_SNDFD, &fd, &fd_sz)<0){
+       printf("failed to get send fd with errno %d\n",nn_errno());
+    }
+
+    int n;
+    int i = 0;
+    while(++i < 50){
+       n = sprintf(msg, "item %d",i);
+
+       fdwait(fd, FDW_IN, -1);
+       bytes = nn_send(producer, &msg, n+1,NN_DONTWAIT);
+       
+       assert(bytes>=0);
+
+       if (bytes<0){
+            printf("nn_send failed: %s\n",nn_strerror(nn_errno()));
+       }
+       printf("produced job %d, send %d bytes\n",i,bytes);
+       msleep(now()+500);
     }    
 }
 
-coroutine void consume(int id){
+coroutine void consume(char *url, int id){
     printf("starting worker %d\n",id);
     int consumer = nn_socket(AF_SP, NN_PULL);
     assert(consumer>=0);
-    assert(nn_connect(consumer,"tcp://127.0.0.1:667")>=0);
+    assert(nn_connect(consumer,url)>=0);
 
     int fd;
     size_t fd_sz = sizeof(fd);
@@ -41,9 +60,9 @@ coroutine void consume(int id){
         fdwait(fd, FDW_IN, -1);
         assert(nn_recv(consumer, &buf, NN_MSG, NN_DONTWAIT)>=0);
 
-        printf("%d consumed: %s\n",id, buf);
+        printf("worker %d got a job: %s\n",id, buf);
         nn_freemsg(buf);
-        msleep(now()+1000);
+        msleep(now()+2000);
     }
 
 }
@@ -96,13 +115,17 @@ coroutine void subscribe(){
 int main (const int argc, const char **argv)
 {
     //go(publish());
-    go(consume(1));
-    go(consume(2));
-    go(consume(3));
+    char *url = "tcp://127.0.0.1:667";
+    
+    go(produce(url));
+    msleep(now()+3000);
+    go(consume(url, 1));
+    go(consume(url, 2));
+    go(consume(url, 3));
+    msleep(now()+120000);
     while(0){
         //go(subscribe());
         //msleep(now()+10000); 
     }
-    produce();
     return 0; 
 }
