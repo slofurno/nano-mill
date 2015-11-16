@@ -23,8 +23,8 @@ coroutine void produce(char *url){
     }
 
     int n;
-    int i = 0;
-    while(++i < 50){
+    int i = 20;
+    while(--i >=0){
        n = sprintf(msg, "item %d",i);
 
        fdwait(fd, FDW_IN, -1);
