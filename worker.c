@@ -14,15 +14,16 @@ int main(void)
     printf("worker started\n");
     
     char msg[100];
-    while(1){
-        int reporter = nn_socket(AF_SP,NN_PUSH);
-        nn_connect(reporter,FANIN);
+    int reporter = nn_socket(AF_SP,NN_PUSH);
+    nn_connect(reporter,FANIN);
 
-        int consumer = nn_socket(AF_SP,NN_PULL);
-        nn_connect(consumer,FANOUT);
-        
-        size_t nbytes;
-        char *buf = NULL;
+    int consumer = nn_socket(AF_SP,NN_PULL);
+    nn_connect(consumer,FANOUT);
+    
+    size_t nbytes;
+    char *buf = NULL;
+
+    while(1){
 
         nbytes = nn_recv(consumer,&buf,NN_MSG,0);
         printf("got work for id: %s\n",buf);
@@ -30,8 +31,7 @@ int main(void)
         printf("work %s done, reporting\n", buf);
 
         int n = sprintf(msg,"%s|finished :D",buf);
-        nn_send(reporter,&msg,n+1,0);
+        nn_send(reporter,&buf,NN_MSG,0);
         printf("report sent\n");
-        nn_freemsg(buf);
     }    
 }

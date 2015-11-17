@@ -59,9 +59,16 @@ coroutine void subscribe(gif_request *request)
     assert(nn_getsockopt(sub,NN_SOL_SOCKET,NN_RCVFD,&fd,&fd_sz)>=0);
 
     printf("waiting for job to finish\n");
-    fdwait(fd,FDW_IN,-1);
-    assert(nn_recv(sub,&buf,NN_MSG,NN_DONTWAIT)>=0);
+    int events = fdwait(fd,FDW_IN,-1);
+    if (events & FDW_IN){
+        printf("fd ready to read..\n");
+    }else{
+        printf("fd error??\n");
+    }
 
+    size_t nbytes;
+    nbytes = nn_recv(sub,&buf,NN_MSG,NN_DONTWAIT);
+    printf("rec %d bytes\n",nbytes);
     printf("job done: %s\n",buf);
 }
 
@@ -82,21 +89,22 @@ coroutine void start_collector(){
     int send_fd;
     size_t send_fd_sz = sizeof(send_fd);
 
-    nn_getsockopt(publisher,NN_SOL_SOCKET,NN_SNDFD,&send_fd,&send_fd_sz);
+    assert(nn_getsockopt(publisher,NN_SOL_SOCKET,NN_SNDFD,&send_fd,&send_fd_sz)>=0);
     assert(nn_getsockopt(collector,NN_SOL_SOCKET,NN_RCVFD,&fd,&fd_sz)>=0);
-    char *buf = NULL;
+    //char *buf = NULL;
+    char buf[100];
 
     size_t nbytes;
 
     while(1){
         
         fdwait(fd,FDW_IN,-1);
-        nbytes = nn_recv(collector,&buf,NN_MSG,NN_DONTWAIT);
+        nbytes = nn_recv(collector,&buf,sizeof(buf),NN_DONTWAIT);
         printf("lets announce job is done: %s\n",buf);
         
-        fdwait(send_fd,FDW_IN,-1);
-        nn_send(publisher,buf,nbytes,NN_DONTWAIT);
-        nn_freemsg(buf);
+//        fdwait(send_fd,FDW_IN,-1);
+        nn_send(publisher,&buf,nbytes+1, NN_DONTWAIT);
+       // nn_freemsg(buf);
     }
 }
 
@@ -111,13 +119,13 @@ coroutine void start_producer(chan queue)
     size_t bytes;
 
     assert(nn_getsockopt(producer,NN_SOL_SOCKET,NN_SNDFD,&fd,&fd_sz)>=0);
-
+    //TODO: currently leaking the request upload
     while(1){
         printf("waiting for next request\n");
         gif_request *request= chr(queue,gif_request*);
         printf("producing request id: %s\n", request->uuid->bytes);    
 
-//        fdwait(fd,FDW_OUT,-1);
+        fdwait(fd,FDW_OUT,-1);
         bytes = nn_send(producer,request->uuid->bytes,request->uuid->len,NN_DONTWAIT);
         assert(bytes>0);
     }
@@ -200,7 +208,7 @@ coroutine void handle_conn(tcpsock conn, chan queue){
     request->uuid = id;
 
     chs(queue,gif_request*, request);
-    subscribe(request);
+    //subscribe(request);
     printf("we know our works done\n");
     tcpclose(conn);
     //dump_bytes(file, content_length);
@@ -209,7 +217,7 @@ coroutine void handle_conn(tcpsock conn, chan queue){
 
 int main(void){
 
-    printf("welp\n");
+    printf("running http listener...\n");
     ipaddr addr = iplocal(NULL, 80, 0);
     tcpsock ls = tcplisten(addr, 10);
     chan queue = chmake(gif_request*, 64);

@@ -1,19 +1,23 @@
 cflags= -Wall -std=c11
 
+.PHONY: build clean run all
+
 all: run
 
-http.o: 
+http.o: http.c 
 	gcc -c $(cflags) http.c
 
-worker.o: 
+worker.o: worker.c 
 	gcc -c $(cflags) worker.c 
 
-build: http.o worker.o
-	gcc $(cflags) http.o -o http -lnanomsg -lmill -luuid
-	gcc $(cflags) worker.o -o worker -lnanomsg
+worker: worker.o
+	gcc -o worker $(cflags) worker.o -lnanomsg
+
+http: http.o
+	gcc -o http $(cflags) http.o -lnanomsg -lmill -luuid
 
 clean:
 	rm *.o
 
-run: build
+run: worker http
 	./http
