@@ -125,7 +125,7 @@ coroutine void start_producer(chan queue)
         gif_request *request= chr(queue,gif_request*);
         printf("producing request id: %s\n", request->uuid->bytes);    
 
-        fdwait(fd,FDW_OUT,-1);
+        fdwait(fd,FDW_IN,-1);
         bytes = nn_send(producer,request->uuid->bytes,request->uuid->len,NN_DONTWAIT);
         assert(bytes>0);
     }
