@@ -1,17 +1,16 @@
 cflags= -Wall -std=c11
-prefix= /usr/local
 
 all: run
 
 http.o: 
 	gcc -c $(cflags) http.c
 
-publish.o: 
-	gcc -c $(cflags) publish.c 
+worker.o: 
+	gcc -c $(cflags) worker.c 
 
-build: http.o publish.o
-	gcc $(cflags) http.c -o http -lmill
-	gcc publish.c -o publish $(cflags) -lnanomsg -lmill
+build: http.o worker.o
+	gcc $(cflags) http.o -o http -lnanomsg -lmill -luuid
+	gcc $(cflags) worker.o -o worker -lnanomsg
 
 clean:
 	rm *.o
