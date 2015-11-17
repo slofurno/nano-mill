@@ -18,11 +18,22 @@ struct slice {
     char *bytes;
 };
 
+void free_slice(slice *s)
+{
+    free(s->bytes);
+}
+
 typedef struct gif_request gif_request;
 struct gif_request {
     slice *uuid;
     slice *data;
 };
+
+void free_gif_request(gif_request *s)
+{
+    free_slice(s->uuid);
+    free_slice(s->data);
+}
 
 int min(int n, int m){
     if (n >= m){
@@ -119,10 +130,13 @@ coroutine void start_producer(chan queue)
     int fd;
     size_t fd_sz = sizeof(fd);
     size_t bytes;
-    
+
+    //is 100mb enough queue size for uploads?
+    int snd_buf_len = 100000000;
     void *buf = NULL;
 
     assert(nn_getsockopt(producer,NN_SOL_SOCKET,NN_SNDFD,&fd,&fd_sz)>=0);
+    assert(nn_setsockopt(producer,NN_SOL_SOCKET,NN_SNDBUF,&snd_buf_len,sizeof(snd_buf_len))>=0);
     //TODO: currently leaking the request upload
     while(1){
         printf("waiting for next request\n");
@@ -132,19 +146,22 @@ coroutine void start_producer(chan queue)
         size_t sum = request->uuid->len-1 + request->data->len;
         
         printf("allocating %d\n",sum);
-//        buf = nn_allocmsg (sum, 0);
-        buf = malloc(sizeof(char)*sum);
+        buf = nn_allocmsg (sum, 0);
+       // buf = malloc(sizeof(char)*sum);
         assert(buf!=NULL);
-
         void *bp = buf+36;
-        memcpy(buf, request->uuid->bytes,36);
 
+        memcpy(buf, request->uuid->bytes,36);
         memcpy(bp,request->data->bytes,request->data->len);
+
+        free_slice(request->data);
+        //TODO:still using uuid in subscribe
+        //free_gif_request(request);
         fdwait(fd,FDW_IN,-1);
 //        bytes = nn_send(producer,request->uuid->bytes,request->uuid->len,NN_DONTWAIT);
-        bytes = nn_send(producer, buf, sum, NN_DONTWAIT);
+        bytes = nn_send(producer, &buf, NN_MSG, NN_DONTWAIT);
         printf("im at a loss here: %d\n",bytes);
-//        assert(bytes==sum);
+        assert(bytes==sum);
     }
 }
 
@@ -191,8 +208,15 @@ coroutine void handle_conn(tcpsock conn, chan queue){
         n++;
     }
 
-    char *okres ="HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+
+    uuid_t uuid;
+    char *u = malloc(37);
+    uuid_generate(uuid);
+    uuid_unparse(uuid, u);
+
+    char *okres ="HTTP/1.1 200 OK\r\nContent-Length: 36\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n";
     nbytes = tcpsend(conn, okres, strlen(okres)+1, -1);
+    tcpsend(conn, u, strlen(u), -1);
     tcpflush(conn, -1);
     //printf("wrote response\n"); 
     //printf("looking for content length: %d\n",content_length);
@@ -207,11 +231,6 @@ coroutine void handle_conn(tcpsock conn, chan queue){
         //printf("%d bytes left\n", left);
     }
 
-    uuid_t uuid;
-    char *u = malloc(37);
-    
-    uuid_generate(uuid);
-    uuid_unparse(uuid, u);
 
     gif_request *request = malloc(sizeof(gif_request));
     slice *data = malloc(sizeof(slice));
