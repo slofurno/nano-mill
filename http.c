@@ -88,9 +88,11 @@ coroutine void start_collector(){
 
     int send_fd;
     size_t send_fd_sz = sizeof(send_fd);
+    int max_sz = -1;
 
     assert(nn_getsockopt(publisher,NN_SOL_SOCKET,NN_SNDFD,&send_fd,&send_fd_sz)>=0);
     assert(nn_getsockopt(collector,NN_SOL_SOCKET,NN_RCVFD,&fd,&fd_sz)>=0);
+    nn_setsockopt(collector,NN_SOL_SOCKET,NN_RCVMAXSIZE,&max_sz,sizeof(max_sz));
     //char *buf = NULL;
     char buf[100];
 
@@ -117,6 +119,8 @@ coroutine void start_producer(chan queue)
     int fd;
     size_t fd_sz = sizeof(fd);
     size_t bytes;
+    
+    void *buf = NULL;
 
     assert(nn_getsockopt(producer,NN_SOL_SOCKET,NN_SNDFD,&fd,&fd_sz)>=0);
     //TODO: currently leaking the request upload
@@ -125,9 +129,22 @@ coroutine void start_producer(chan queue)
         gif_request *request= chr(queue,gif_request*);
         printf("producing request id: %s\n", request->uuid->bytes);    
 
+        size_t sum = request->uuid->len-1 + request->data->len;
+        
+        printf("allocating %d\n",sum);
+//        buf = nn_allocmsg (sum, 0);
+        buf = malloc(sizeof(char)*sum);
+        assert(buf!=NULL);
+
+        void *bp = buf+36;
+        memcpy(buf, request->uuid->bytes,36);
+
+        memcpy(bp,request->data->bytes,request->data->len);
         fdwait(fd,FDW_IN,-1);
-        bytes = nn_send(producer,request->uuid->bytes,request->uuid->len,NN_DONTWAIT);
-        assert(bytes>0);
+//        bytes = nn_send(producer,request->uuid->bytes,request->uuid->len,NN_DONTWAIT);
+        bytes = nn_send(producer, buf, sum, NN_DONTWAIT);
+        printf("im at a loss here: %d\n",bytes);
+//        assert(bytes==sum);
     }
 }
 
@@ -208,7 +225,7 @@ coroutine void handle_conn(tcpsock conn, chan queue){
     request->uuid = id;
 
     chs(queue,gif_request*, request);
-    //subscribe(request);
+    subscribe(request);
     printf("we know our works done\n");
     tcpclose(conn);
     //dump_bytes(file, content_length);
@@ -222,12 +239,12 @@ int main(void){
     tcpsock ls = tcplisten(addr, 10);
     chan queue = chmake(gif_request*, 64);
     
-    go(start_producer(queue));
+    go(start_producer(chdup(queue)));
     go(start_collector());
 
     while(1){
         tcpsock s = tcpaccept(ls, -1);
-        go(handle_conn(s, queue));
+        go(handle_conn(s, chdup(queue)));
     }
     return 0;
 }
