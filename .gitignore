@@ -4,3 +4,4 @@
 !makefile
 *.exe
 *.swp
+*.o
