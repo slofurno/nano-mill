@@ -1,4 +1,9 @@
 #!/bin/sh
+cd tmp
+palette="$1.png"
 
-echo "well lets hope ffmpeg works" >> log.txt
-sleep 5
+filters="fps=10,scale=iw/2:-1:flags=lanczos"
+
+ffmpeg -v warning -i $1 -vf "$filters,palettegen" -y $palette
+ffmpeg -v warning -i $1 -i $palette -lavfi "$filters [x]; [x][1:v] paletteuse" -y $1.gif
+
