@@ -68,10 +68,16 @@ coroutine void subscribe(gif_request *request)
         printf("fd error??\n");
     }
 
-    size_t nbytes;
+    int nbytes;
     nbytes = nn_recv(sub,&buf,NN_MSG,NN_DONTWAIT);
-    printf("rec %d bytes\n",nbytes);
-    printf("job done: %s\n",buf);
+    if (nbytes>0){
+        printf("rec %d bytes\n",nbytes);
+        printf("job done: %s\n",buf);
+    }else if(nbytes==0){
+        printf("how do we rec 0 bytes??\n");
+    }else{
+        printf("error : %s\n",nn_strerror(nn_errno()));
+    }
 }
 
 
