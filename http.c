@@ -62,15 +62,22 @@ coroutine void subscribe(gif_request *request)
     assert(nn_getsockopt(sub,NN_SOL_SOCKET,NN_RCVFD,&fd,&fd_sz)>=0);
 
     printf("waiting for job to finish\n");
-    int events = fdwait(fd,FDW_IN,-1);
-    if (events & FDW_IN){
-        printf("fd %d for sub fd %d signaled..\n", fd, sub);
-    }else{
-        printf("fd error??\n");
-    }
+    int events;
+    int nbytes=-1;
+    
+    //so fd isnt signaled when this subscriber has data...
+    //its signaled anytime ANY subscriber has data, for now
+    //ill just assume if nbytes==-1, errno = EAGAIN
+    do{
+        events = fdwait(fd,FDW_IN,-1);
+        if (events & FDW_IN){
+            printf("fd %d for sub fd %d signaled..\n", fd, sub);
+        }else{
+            printf("fd error??\n");
+        }
+        nbytes = nn_recv(sub,&buf,NN_MSG,NN_DONTWAIT);
+    }while(nbytes==-1);
 
-    int nbytes;
-    nbytes = nn_recv(sub,&buf,NN_MSG,NN_DONTWAIT);
     if (nbytes>0){
         printf("rec %d bytes\n",nbytes);
         printf("job done: %s\n",buf);
