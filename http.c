@@ -11,7 +11,7 @@
 
 #define FANOUT "tcp://*:666"
 #define FANIN "tcp://*:667"
-#define REPORT "tcp://*:668"
+#define REPORT "tcp://127.0.0.1:668"
 
 
 typedef struct gif_request gif_request;
