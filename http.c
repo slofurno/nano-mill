@@ -44,7 +44,7 @@ void dump_bytes(char *bytes, int len){
 
 }
 
-void subscribe(gif_request *request)
+coroutine void subscribe(gif_request *request)
 {
     int sub = nn_socket(AF_SP,NN_SUB);
     assert(sub>=0);
