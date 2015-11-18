@@ -16,6 +16,9 @@ worker: worker.o
 http: http.o
 	gcc -o http $(cflags) http.o -lnanomsg -lmill -luuid
 
+test_slice: test_slice.c slice.c
+	gcc -o test_slice $(cflags) test_slice.c
+
 clean:
 	rm *.o
 

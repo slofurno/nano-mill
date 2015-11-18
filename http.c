@@ -7,21 +7,12 @@
 #include <nanomsg/nn.h>
 #include <nanomsg/pubsub.h>
 #include <nanomsg/pipeline.h>
+#include "slice.c"
 
 #define FANOUT "tcp://127.0.0.1:666"
 #define FANIN "tcp://127.0.0.1:667"
 #define REPORT "tcp://127.0.0.1:668"
 
-typedef struct slice slice;
-struct slice {
-    int len;
-    char *bytes;
-};
-
-void free_slice(slice *s)
-{
-    free(s->bytes);
-}
 
 typedef struct gif_request gif_request;
 struct gif_request {

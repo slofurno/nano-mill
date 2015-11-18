@@ -79,6 +79,17 @@ int forkorsomething(char *uuid)
        close(fd[0]);
        execlp("/bin/sh","/bin/sh","-c", command, NULL);
     }
+
+    int nread;
+    char buffer[128];
+
+    if(read(fd[0], buffer, 128)==-1) {
+            printf("Oh dear, something went wrong with read()! %s\n", strerror(errno));
+    }
+    else{
+        printf("ok.. %s\n",buffer);
+    }
+
     wait(NULL); 
     return 0;
 }

@@ -1,4 +1,5 @@
 #!/bin/sh
+printf "HELLO????\n"
 cd tmp
 palette="$1.png"
 
