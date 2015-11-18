@@ -64,7 +64,7 @@ coroutine void subscribe(gif_request *request)
     printf("waiting for job to finish\n");
     int events = fdwait(fd,FDW_IN,-1);
     if (events & FDW_IN){
-        printf("fd for sub fd %d signaled..\n", sub);
+        printf("fd %d for sub fd %d signaled..\n", fd, sub);
     }else{
         printf("fd error??\n");
     }
