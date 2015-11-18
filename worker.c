@@ -7,18 +7,18 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include "slice.c"
 
 #define FANOUT "tcp://127.0.0.1:666"
 #define FANIN "tcp://127.0.0.1:667"
 #define REPORT "tcp://127.0.0.1:668"
 
-int forkorsomething(char*);
+slice* forkorsomething(char*);
 
 int main(void)
 {
     printf("worker started\n");
     
-    char msg[100];
     int reporter = nn_socket(AF_SP,NN_PUSH);
     nn_connect(reporter,FANIN);
     int max_sz = -1;
@@ -45,16 +45,16 @@ int main(void)
 
         printf("got work for id: %s\n",uuid);
         sleep(2);
-        forkorsomething(uuid);
+        slice *result = forkorsomething(uuid);
         printf("work %s done, reporting\n", uuid);
 
-        int n = sprintf(msg,"%s|finished :D",uuid);
-        nn_send(reporter,msg,n+1,0);
+        nn_send(reporter,result->bytes,result->len +1,0);
+        free_slice(result);
         printf("report sent\n");
     }    
 }
 
-int forkorsomething(char *uuid)
+slice* forkorsomething(char *uuid)
 {
     int fd[2];
     pipe(fd);
@@ -72,7 +72,7 @@ int forkorsomething(char *uuid)
     childpid = fork();
     if (childpid == -1){
        fprintf(stderr, "FORK failed");
-       return -1;
+       return NULL;
     } else if (childpid == 0) {
        close(1);
        dup2(fd[1], 1);
@@ -80,16 +80,17 @@ int forkorsomething(char *uuid)
        execlp("/bin/sh","/bin/sh","-c", command, NULL);
     }
 
+    close(fd[1]);
     int nread;
-    char buffer[128];
+    char buffer[4096];
+    slice *result = make_slice();
+    append(result,uuid); 
 
-    if(read(fd[0], buffer, 128)==-1) {
-            printf("Oh dear, something went wrong with read()! %s\n", strerror(errno));
-    }
-    else{
-        printf("ok.. %s\n",buffer);
+    while((nread=read(fd[0], buffer, 4096))>0) {
+        appendn(result,buffer,nread); 
     }
 
-    wait(NULL); 
-    return 0;
+    printf("read %d bytes from result\n",result->len);
+//    wait(NULL); 
+    return result;
 }

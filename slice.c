@@ -14,9 +14,8 @@ void free_slice(slice *s)
     free(s->bytes);
 }
 
-void append(slice *self, char *str)
+void appendn(slice *self, char *str, size_t n)
 {
-    size_t n = strlen(str);
     while ((self->len + n + 1) > self->cap){
         self->cap = 1.6*self->cap;
         printf("realloc to cap: %d\n",self->cap);
@@ -27,6 +26,12 @@ void append(slice *self, char *str)
     memcpy(dst, str, n); 
     self->len = self->len+n;
     self->bytes[self->len] = '\0';
+}
+
+void append(slice *self, char *str)
+{
+    size_t n = strlen(str);
+    appendn(self, str, n);
 }
 
 slice* make_slice()

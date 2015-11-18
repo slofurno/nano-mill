@@ -9,9 +9,9 @@
 #include <nanomsg/pipeline.h>
 #include "slice.c"
 
-#define FANOUT "tcp://127.0.0.1:666"
-#define FANIN "tcp://127.0.0.1:667"
-#define REPORT "tcp://127.0.0.1:668"
+#define FANOUT "tcp://*:666"
+#define FANIN "tcp://*:667"
+#define REPORT "tcp://*:668"
 
 
 typedef struct gif_request gif_request;
@@ -95,20 +95,28 @@ coroutine void start_collector(){
     assert(nn_getsockopt(publisher,NN_SOL_SOCKET,NN_SNDFD,&send_fd,&send_fd_sz)>=0);
     assert(nn_getsockopt(collector,NN_SOL_SOCKET,NN_RCVFD,&fd,&fd_sz)>=0);
     nn_setsockopt(collector,NN_SOL_SOCKET,NN_RCVMAXSIZE,&max_sz,sizeof(max_sz));
-    //char *buf = NULL;
-    char buf[100];
 
+    char *buf = NULL;
     size_t nbytes;
+    char uuid[37];
+    char directory[70];
 
     while(1){
         
         fdwait(fd,FDW_IN,-1);
-        nbytes = nn_recv(collector,&buf,sizeof(buf),NN_DONTWAIT);
-        printf("lets announce job is done: %s\n",buf);
+        nbytes = nn_recv(collector,&buf,NN_MSG,NN_DONTWAIT);
+
+        memcpy(uuid,buf,sizeof(char)*36);
+        sprintf(directory,"tmp/REAL-%s.gif",uuid);
+        printf("lets announce job is done: %s\n",uuid);
+
+        FILE *f = fopen(directory, "w");
+        fwrite(buf+36, sizeof(char), nbytes-36,f);
+        fclose(f);
         
 //        fdwait(send_fd,FDW_IN,-1);
-        nn_send(publisher,&buf,nbytes+1, NN_DONTWAIT);
-       // nn_freemsg(buf);
+        nn_send(publisher,uuid,36, NN_DONTWAIT);
+        nn_freemsg(buf);
     }
 }
 
