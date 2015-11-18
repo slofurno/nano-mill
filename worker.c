@@ -42,6 +42,7 @@ int main(void)
 
         fwrite(buf+36, sizeof(char), nbytes-36, file);
         fclose(file);        
+        nn_freemsg(buf);
 
         printf("got work for id: %s\n",uuid);
         sleep(2);
