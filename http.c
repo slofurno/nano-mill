@@ -44,7 +44,7 @@ void dump_bytes(char *bytes, int len){
 
 }
 
-coroutine void subscribe(gif_request *request)
+void subscribe(gif_request *request)
 {
     int sub = nn_socket(AF_SP,NN_SUB);
     assert(sub>=0);
@@ -165,7 +165,6 @@ coroutine void start_producer(chan queue)
         fdwait(fd,FDW_IN,-1);
 //        bytes = nn_send(producer,request->uuid->bytes,request->uuid->len,NN_DONTWAIT);
         bytes = nn_send(producer, &buf, NN_MSG, NN_DONTWAIT);
-        printf("im at a loss here: %d\n",bytes);
         assert(bytes==sum);
     }
 }
