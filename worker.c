@@ -22,15 +22,16 @@ int main(void)
     int reporter = nn_socket(AF_SP,NN_PUSH);
     nn_connect(reporter,FANIN);
     int max_sz = -1;
-    int consumer = nn_socket(AF_SP,NN_PULL);
-    nn_connect(consumer,FANOUT);
-    nn_setsockopt(consumer, NN_SOL_SOCKET, NN_RCVMAXSIZE, &max_sz, sizeof(max_sz)); 
     size_t nbytes;
     char *buf = NULL;
 
     while(1){
-
+        int consumer = nn_socket(AF_SP,NN_PULL);
+        nn_connect(consumer,FANOUT);
+        nn_setsockopt(consumer, NN_SOL_SOCKET, NN_RCVMAXSIZE, &max_sz, sizeof(max_sz)); 
+    
         nbytes = nn_recv(consumer,&buf,NN_MSG,0);
+        nn_close(consumer);
         
         char *uuid = malloc(sizeof(char)*37);
         memcpy((void*)uuid,(const void*)buf,36);
