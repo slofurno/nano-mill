@@ -47,6 +47,7 @@ void dump_bytes(char *bytes, int len){
 coroutine void subscribe(gif_request *request)
 {
     int sub = nn_socket(AF_SP,NN_SUB);
+    printf("sub on fd: %d\n",sub);
     assert(sub>=0);
 
     char *buf= NULL;
@@ -63,7 +64,7 @@ coroutine void subscribe(gif_request *request)
     printf("waiting for job to finish\n");
     int events = fdwait(fd,FDW_IN,-1);
     if (events & FDW_IN){
-        printf("fd ready to read..\n");
+        printf("fd for sub fd %d signaled..\n", sub);
     }else{
         printf("fd error??\n");
     }
