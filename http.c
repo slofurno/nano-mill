@@ -248,8 +248,7 @@ coroutine void handle_conn(tcpsock conn, chan queue){
     request->uuid = id;
 
     chs(queue,gif_request*, request);
-    subscribe(request);
-    printf("we know our works done\n");
+    go(subscribe(request));
     tcpclose(conn);
     //dump_bytes(file, content_length);
 }
