@@ -7,11 +7,12 @@
 #include <nanomsg/nn.h>
 #include <nanomsg/pubsub.h>
 #include <nanomsg/pipeline.h>
+#include <nanomsg/reqrep.h>
+
 #include "slice.c"
 
-#define FANOUT "tcp://*:666"
-#define FANIN "tcp://*:667"
 #define REPORT "tcp://127.0.0.1:668"
+#define WORKERROUTER "tcp://*:666"
 
 
 typedef struct gif_request gif_request;
@@ -89,91 +90,106 @@ coroutine void subscribe(gif_request *request)
 }
 
 
-coroutine void start_collector(){
+coroutine void start_collector(chan workers, int worker_router){
 
-    int publisher = nn_socket(AF_SP,NN_PUB);
-    nn_bind(publisher,REPORT);
-
-    int collector = nn_socket(AF_SP,NN_PULL);
-    assert(collector>=0);
-    assert(nn_bind(collector,FANIN)>=0);
+    int publisher = nn_socket(AF_SP, NN_PUB);
+    nn_bind(publisher, REPORT);
 
     printf("collector started\n");
     int fd;
     size_t fd_sz = sizeof(fd);
 
-    int send_fd;
-    size_t send_fd_sz = sizeof(send_fd);
-    int max_sz = -1;
+    assert(nn_getsockopt(worker_router, NN_SOL_SOCKET, NN_RCVFD, &fd, &fd_sz) >= 0);
 
-    assert(nn_getsockopt(publisher,NN_SOL_SOCKET,NN_SNDFD,&send_fd,&send_fd_sz)>=0);
-    assert(nn_getsockopt(collector,NN_SOL_SOCKET,NN_RCVFD,&fd,&fd_sz)>=0);
-    nn_setsockopt(collector,NN_SOL_SOCKET,NN_RCVMAXSIZE,&max_sz,sizeof(max_sz));
-
-    char *buf = NULL;
-    size_t nbytes;
+    //void *body = malloc(sizeof(char)*100000);
+    char body [1000000];
     char uuid[37];
     char directory[70];
 
+    struct nn_msghdr hdr;
+
     while(1){
-        
-        fdwait(fd,FDW_IN,-1);
-        nbytes = nn_recv(collector,&buf,NN_MSG,NN_DONTWAIT);
+        char *ctrl = malloc(sizeof(char)*64);
+        memset(&hdr, 0, sizeof(hdr));
 
-        memcpy(uuid,buf,sizeof(char)*36);
-        sprintf(directory,"tmp/REAL-%s.gif",uuid);
-        printf("lets announce job is done: %s\n",uuid);
+        struct nn_iovec iovec;
+        iovec.iov_base = body;
+        iovec.iov_len = 100000;
 
-        FILE *f = fopen(directory, "w");
-        fwrite(buf+36, sizeof(char), nbytes-36,f);
-        fclose(f);
+        hdr.msg_iov = &iovec;
+        hdr.msg_iovlen = 1;
+        hdr.msg_control = ctrl;
+        hdr.msg_controllen = 64;
+
+        fdwait(fd, FDW_IN, -1);
         
-//        fdwait(send_fd,FDW_IN,-1);
-        nn_send(publisher,uuid,36, NN_DONTWAIT);
-        nn_freemsg(buf);
+        printf("worker coming in\n");
+        int rc = nn_recvmsg(worker_router, &hdr, NN_DONTWAIT);
+        assert(rc>=0);
+        printf("fuck yuou\n");
+
+        printf("msg is: %.*s\n", rc, (char*)hdr.msg_iov->iov_base);
+        
+        if (rc >= 100){
+            memcpy(uuid, body, sizeof(char)*36);
+            sprintf(directory, "tmp/REAL-%s.gif", uuid);
+            printf("lets announce job is done: %s\n", uuid);
+
+            FILE *f = fopen(directory, "w");
+            fwrite(body+36, sizeof(char), rc-36, f);
+            fclose(f);
+
+            nn_send(publisher, uuid, 36, NN_DONTWAIT);
+        }
+
+        chs(workers, char*, ctrl);
     }
 }
 
-coroutine void start_producer(chan queue)
+coroutine void start_router(chan workers, int worker_router, chan jobs)
 {
-    int producer = nn_socket(AF_SP,NN_PUSH);
-    assert(producer>=0);
-    assert(nn_bind(producer,FANOUT)>=0);
-    
-    int fd;
-    size_t fd_sz = sizeof(fd);
     size_t bytes;
 
     //is 100mb enough queue size for uploads?
     int snd_buf_len = 100000000;
     void *buf = NULL;
 
-    assert(nn_getsockopt(producer,NN_SOL_SOCKET,NN_SNDFD,&fd,&fd_sz)>=0);
-    assert(nn_setsockopt(producer,NN_SOL_SOCKET,NN_SNDBUF,&snd_buf_len,sizeof(snd_buf_len))>=0);
     //TODO: currently leaking the request upload
     while(1){
         printf("waiting for next request\n");
-        gif_request *request= chr(queue,gif_request*);
-        printf("producing request id: %s\n", request->uuid->bytes);    
+        gif_request *job = chr(jobs, gif_request*);
+        printf("producing request id: %s\n", job->uuid->bytes);    
 
-        size_t sum = request->uuid->len-1 + request->data->len;
+        size_t sum = job->uuid->len-1 + job->data->len;
         
         printf("allocating %d\n",sum);
         buf = nn_allocmsg (sum, 0);
        // buf = malloc(sizeof(char)*sum);
-        assert(buf!=NULL);
-        void *bp = buf+36;
+        assert(buf != NULL);
 
-        memcpy(buf, request->uuid->bytes,36);
-        memcpy(bp,request->data->bytes,request->data->len);
+        memcpy(buf, job->uuid->bytes, 36);
+        memcpy(buf+36, job->data->bytes, job->data->len);
 
-        free_slice(request->data);
-        //TODO:still using uuid in subscribe
-        //free_gif_request(request);
-        fdwait(fd,FDW_IN,-1);
-//        bytes = nn_send(producer,request->uuid->bytes,request->uuid->len,NN_DONTWAIT);
-        bytes = nn_send(producer, &buf, NN_MSG, NN_DONTWAIT);
-        assert(bytes==sum);
+        free_slice(job->data);
+
+        char *worker_header = chr(workers, char*);
+
+        struct nn_msghdr hdr;
+        memset(&hdr, 0, sizeof(hdr));
+
+        hdr.msg_control = worker_header;
+        hdr.msg_controllen = 64; 
+
+        struct nn_iovec iovec;
+        iovec.iov_base = &buf;
+        iovec.iov_len = NN_MSG;
+
+        hdr.msg_iov = &iovec;
+        hdr.msg_iovlen = 1;
+
+        printf("about to send work\n");
+        bytes = nn_sendmsg(worker_router, &hdr, NN_DONTWAIT);
+        printf("work sent\n");
     }
 }
 
@@ -267,14 +283,24 @@ int main(void){
     printf("running http listener...\n");
     ipaddr addr = iplocal(NULL, 80, 0);
     tcpsock ls = tcplisten(addr, 10);
-    chan queue = chmake(gif_request*, 64);
-    
-    go(start_producer(chdup(queue)));
-    go(start_collector());
+
+    chan jobs = chmake(gif_request*, 64);
+    chan workers = chmake(char*, 64);
+
+    int rcv_max = -1;
+
+    int worker_router = nn_socket(AF_SP_RAW, NN_REP);
+    assert(worker_router >= 0);
+
+    nn_bind(worker_router, WORKERROUTER);
+    nn_setsockopt(worker_router, NN_SOL_SOCKET, NN_RCVMAXSIZE, &rcv_max, sizeof(rcv_max));
+
+    go(start_router(chdup(workers), worker_router, jobs));
+    go(start_collector(chdup(workers), worker_router));
 
     while(1){
         tcpsock s = tcpaccept(ls, -1);
-        go(handle_conn(s, chdup(queue)));
+        go(handle_conn(s, chdup(jobs)));
     }
     return 0;
 }

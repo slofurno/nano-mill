@@ -4,34 +4,33 @@
 #include <string.h>
 #include <nanomsg/nn.h>
 #include <nanomsg/pipeline.h>
+#include <nanomsg/reqrep.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include "slice.c"
 
-#define FANOUT "tcp://127.0.0.1:666"
-#define FANIN "tcp://127.0.0.1:667"
-#define REPORT "tcp://127.0.0.1:668"
+#define WORKERROUTER "tcp://127.0.0.1:666"
 
 slice* forkorsomething(char*);
 
 int main(void)
 {
     printf("worker started\n");
-    
-    int reporter = nn_socket(AF_SP,NN_PUSH);
-    nn_connect(reporter,FANIN);
     int max_sz = -1;
+    
+    int router = nn_socket(AF_SP, NN_REQ);
+    nn_connect(router, WORKERROUTER);
+    nn_setsockopt(router, NN_SOL_SOCKET, NN_RCVMAXSIZE, &max_sz, sizeof(max_sz));
     size_t nbytes;
     char *buf = NULL;
 
+    char *greeting = "hey, another worker is here!";
+    nn_send(router, greeting, strlen(greeting), 0); 
+
     while(1){
-        int consumer = nn_socket(AF_SP,NN_PULL);
-        nn_connect(consumer,FANOUT);
-        nn_setsockopt(consumer, NN_SOL_SOCKET, NN_RCVMAXSIZE, &max_sz, sizeof(max_sz)); 
     
-        nbytes = nn_recv(consumer,&buf,NN_MSG,0);
-        nn_close(consumer);
+        nbytes = nn_recv(router, &buf, NN_MSG, 0);
         
         char *uuid = malloc(sizeof(char)*37);
         memcpy((void*)uuid,(const void*)buf,36);
@@ -50,7 +49,7 @@ int main(void)
         slice *result = forkorsomething(uuid);
         printf("work %s done, reporting\n", uuid);
 
-        nn_send(reporter,result->bytes,result->len +1,0);
+        nn_send(router, result->bytes, result->len+1, 0);
         free_slice(result);
         printf("report sent\n");
     }    
