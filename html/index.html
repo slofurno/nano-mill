@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html{
+    background-color:ghostwhite;
+  }
+
+  body{
+    margin: 0 auto;
+    min-height: 100%;
+    max-width: 700px;
+  }
+
+  .dropzone{
+    background-color: chartreuse;
+    width:400px;
+    height:200px;
+
+  }
+
+</style>
+</head>
+
+<body>
+
+  <form action="/api/listen"
+        class="dropzone"
+        id="my-awesome-dropzone"></form>
+
+<script src="dropzone.js"></script>
+<script src="httpclient.js"></script>
+
+<script>
+Dropzone.options.myAwesomeDropzone = {
+  paramName: "file", // The name that will be used to transfer the file
+  maxFilesize: 120, // MB
+  accept: function(file, done) {
+    console.log(file);
+    else { done(); }
+  }
+};
+
+</script>
+</body>
+</html>
