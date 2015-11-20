@@ -267,7 +267,7 @@ coroutine void handle_conn(tcpsock conn, chan queue){
 
     char *file = malloc(content_length);
     char *filep = file;
-    printf("is the file len: %d\n",content_length);
+    printf("expecting: %d\n",content_length);
     size_t left = content_length;
     while(left>0){
         int min = minimum(left, 4096);
