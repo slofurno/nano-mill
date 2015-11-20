@@ -26,22 +26,20 @@
 
 <body>
 
-  <form action="/api/listen"
-        class="dropzone"
-        id="my-awesome-dropzone"></form>
-
-<script src="dropzone.js"></script>
+<input id="fileItem" type="file">
+<input id="upload" type="button" value="submit">
 <script src="httpclient.js"></script>
 
 <script>
-Dropzone.options.myAwesomeDropzone = {
-  paramName: "file", // The name that will be used to transfer the file
-  maxFilesize: 120, // MB
-  accept: function(file, done) {
-    console.log(file);
-    else { done(); }
-  }
-};
+
+document.getElementById("upload").onclick=function(e){
+    var file = document.getElementById('fileItem').files[0];
+
+
+    var client = httpClient();
+
+    client.request("POST", "/api/listen",file);
+}
 
 </script>
 </body>
