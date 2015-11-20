@@ -13,6 +13,7 @@
 
 #define REPORT "tcp://127.0.0.1:668"
 #define WORKERROUTER "tcp://*:666"
+#define REC_SIZE 100000000
 
 
 typedef struct gif_request gif_request;
@@ -92,7 +93,7 @@ coroutine void subscribe(gif_request *request)
 }
 
 
-coroutine void start_collector(chan workers, int worker_router){
+coroutine void start_collector(chan workers, const int worker_router){
 
     int publisher = nn_socket(AF_SP, NN_PUB);
     nn_bind(publisher, REPORT);
@@ -103,8 +104,7 @@ coroutine void start_collector(chan workers, int worker_router){
 
     assert(nn_getsockopt(worker_router, NN_SOL_SOCKET, NN_RCVFD, &fd, &fd_sz) >= 0);
 
-    //void *body = malloc(sizeof(char)*100000);
-    char body [1000000];
+    char *body = malloc(sizeof(char)*REC_SIZE);
     char uuid[37];
     char directory[70];
 
@@ -116,7 +116,7 @@ coroutine void start_collector(chan workers, int worker_router){
 
         struct nn_iovec iovec;
         iovec.iov_base = body;
-        iovec.iov_len = 100000;
+        iovec.iov_len = REC_SIZE;
 
         hdr.msg_iov = &iovec;
         hdr.msg_iovlen = 1;
@@ -157,16 +157,12 @@ coroutine void start_collector(chan workers, int worker_router){
 
 coroutine void start_router(chan workers, int worker_router, chan jobs)
 {
-    size_t bytes;
-
-    //is 100mb enough queue size for uploads?
-    int snd_buf_len = 100000000;
     void *buf = NULL;
 
-    //TODO: currently leaking the request upload
     while(1){
         printf("waiting for next request\n");
         gif_request *job = chr(jobs, gif_request*);
+        printf("literally, what?\n");
         printf("producing request id: %s\n", job->uuid->bytes);    
 
         size_t sum = job->uuid->len-1 + job->data->len;
@@ -197,7 +193,7 @@ coroutine void start_router(chan workers, int worker_router, chan jobs)
         hdr.msg_iovlen = 1;
 
         printf("about to send work\n");
-        bytes = nn_sendmsg(worker_router, &hdr, NN_DONTWAIT);
+        nn_sendmsg(worker_router, &hdr, NN_DONTWAIT);
         printf("work sent\n");
     }
 }
@@ -287,7 +283,11 @@ coroutine void handle_conn(tcpsock conn, chan queue){
 }
 
 
-int main(void){
+int main(int argc, char **argv){
+
+    if (argc>1){
+        printf("%s\n",argv[1]);
+    }
 
     printf("running http listener...\n");
     ipaddr addr = iplocal(NULL, 80, 0);
@@ -302,10 +302,15 @@ int main(void){
     assert(worker_router >= 0);
 
     nn_bind(worker_router, WORKERROUTER);
-    nn_setsockopt(worker_router, NN_SOL_SOCKET, NN_RCVMAXSIZE, &rcv_max, sizeof(rcv_max));
+    assert(nn_setsockopt(worker_router, NN_SOL_SOCKET, 
+                NN_RCVMAXSIZE, &rcv_max, sizeof(rcv_max)) >= 0);
+    printf("options set...\n");
 
-    go(start_router(chdup(workers), worker_router, jobs));
-    go(start_collector(chdup(workers), worker_router));
+    go(start_router(chdup(workers), worker_router, chdup(jobs)));
+    printf("router started\n");
+
+    go(start_collector((workers), worker_router));
+    printf("skipping collector?\n");
 
     while(1){
         tcpsock s = tcpaccept(ls, -1);

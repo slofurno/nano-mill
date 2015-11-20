@@ -1,13 +1,13 @@
-cflags= -Wall -std=c11
+cflags= -Wall -Wextra -std=c11
 
 .PHONY: build clean run all
 
 all: run
 
-http.o: http.c 
-	gcc -c $(cflags) http.c
+http.o: http.c slice.c 
+	gcc -c $(cflags) -g http.c
 
-worker.o: worker.c 
+worker.o: worker.c slice.c 
 	gcc -c $(cflags) worker.c 
 
 worker: worker.o
