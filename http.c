@@ -13,7 +13,7 @@
 
 #define REPORT "tcp://127.0.0.1:668"
 #define WORKERROUTER "tcp://*:666"
-#define REC_SIZE 100000000
+#define REC_SIZE 500000000
 
 
 typedef struct gif_request gif_request;
