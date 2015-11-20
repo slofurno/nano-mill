@@ -16,12 +16,18 @@ slice* forkorsomething(char*);
 
 int main(void)
 {
+    printf("what: %d\n", ENOPROTOOPT);
     printf("worker started\n");
     int max_sz = -1;
+    int rsnd = 2000000000;
     
     int router = nn_socket(AF_SP, NN_REQ);
-    nn_connect(router, WORKERROUTER);
     nn_setsockopt(router, NN_SOL_SOCKET, NN_RCVMAXSIZE, &max_sz, sizeof(max_sz));
+    int optres = nn_setsockopt(router, NN_REQ, NN_REQ_RESEND_IVL, &rsnd, sizeof(rsnd)); 
+    printf("whats this: %d\n", optres);
+    assert(optres==0);
+    nn_connect(router, WORKERROUTER);
+
     size_t nbytes;
     char *buf = NULL;
 
@@ -45,7 +51,6 @@ int main(void)
         nn_freemsg(buf);
 
         printf("got work for id: %s\n",uuid);
-        sleep(2);
         slice *result = forkorsomething(uuid);
         printf("work %s done, reporting\n", uuid);
 

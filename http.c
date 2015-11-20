@@ -87,6 +87,8 @@ coroutine void subscribe(gif_request *request)
     }else{
         printf("error : %s\n",nn_strerror(nn_errno()));
     }
+
+    nn_close(sub);
 }
 
 
@@ -121,7 +123,14 @@ coroutine void start_collector(chan workers, int worker_router){
         hdr.msg_control = ctrl;
         hdr.msg_controllen = 64;
 
-        fdwait(fd, FDW_IN, -1);
+        int events = fdwait(fd, FDW_IN, -1);
+
+        events = fdwait(fd,FDW_IN,-1);
+        if (events & FDW_IN){
+            printf("fd d for sub fd d signaled..\n");
+        }else{
+            printf("fd error??\n");
+        }
         
         printf("worker coming in\n");
         int rc = nn_recvmsg(worker_router, &hdr, NN_DONTWAIT);
