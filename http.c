@@ -242,16 +242,18 @@ coroutine void handle_conn(tcpsock conn, chan queue){
         if (index == NULL){
             goto done;
         }
-
         while((nbytes = fread(buf, sizeof(char), 4096, index)) > 0){
            printf("appending\n");
-           append(result, buf); 
+           appendn(result, buf, nbytes); 
         }
 
+        fclose(index);
         int hdrlen = sprintf(buf, okres, result->len);
         tcpsend(conn, buf, hdrlen, -1);
         tcpsend(conn, result->bytes, result->len, -1);
         tcpflush(conn, -1);
+
+        free_slice(result);
         goto done;
     }
 
